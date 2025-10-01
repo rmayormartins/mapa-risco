@@ -497,8 +497,8 @@
                         <label>Carregar Dados CEMADEN (CSV)</label>
                         <div class="upload-area" onclick="document.getElementById('csv-upload').click()">
                             <input type="file" id="csv-upload" accept=".csv" onchange="carregarCSV(event)">
-                            <p class="upload-text">Selecionar arquivo CSV</p>
-                            <small class="upload-hint">Dados de estações pluviométricas</small>
+                            <p class="upload-text">Clique para trocar arquivo</p>
+                            <small class="upload-hint">Arquivo cemaden.csv carregado automaticamente</small>
                         </div>
                     </div>
                     
@@ -992,9 +992,37 @@
             return labels[risco] || risco;
         }
         
+        // Carregar arquivo CSV automaticamente
+        async function carregarCSVAutomatico() {
+            try {
+                showNotification('Carregando dados do CEMADEN...', 'info');
+                
+                const response = await fetch('cemaden.csv');
+                if (!response.ok) throw new Error('Arquivo não encontrado');
+                
+                const csvText = await response.text();
+                
+                Papa.parse(csvText, {
+                    header: true,
+                    complete: function(results) {
+                        processarDadosCEMADEN(results.data);
+                        showNotification('Dados do CEMADEN carregados! Clique em "Cruzar com Dados IBGE"', 'success');
+                    },
+                    error: function(error) {
+                        console.error('Erro ao processar CSV:', error);
+                        showNotification('Erro ao processar dados. Carregue manualmente.', 'error');
+                    }
+                });
+            } catch (error) {
+                console.log('Arquivo cemaden.csv não encontrado. Carregue manualmente.');
+                showNotification('Carregue o arquivo CSV do CEMADEN para começar', 'info');
+            }
+        }
+        
         // Inicializar ao carregar a página
         window.onload = function() {
             initMap();
+            carregarCSVAutomatico();
         };
     </script>
 </body>
