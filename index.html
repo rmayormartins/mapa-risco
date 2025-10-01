@@ -574,10 +574,11 @@
             <p>
                 <strong>Metodologia:</strong><br>
                 <strong>1.</strong> Dados CEMADEN fornecem localização geográfica de áreas monitoradas<br>
-                <strong>2.</strong> API do IBGE retorna população total de Itajaí (Censo 2022)<br>
+                <strong>2.</strong> API do IBGE retorna população de Itajaí: 264.054 pessoas (Censo 2022)<br>
                 <strong>3.</strong> Análise espacial cria buffer (área de influência) ao redor de cada ponto<br>
-                <strong>4.</strong> População é distribuída proporcionalmente considerando densidade urbana<br>
-                <strong>5.</strong> Sistema calcula população vulnerável em cada área de risco
+                <strong>4.</strong> População é distribuída considerando densidade urbana e nível de risco<br>
+                <strong>5.</strong> Perfil demográfico de Itajaí: 19% idosos, 21% crianças, 6.7% PcD<br>
+                <strong>6.</strong> Sistema calcula população vulnerável em cada área de risco
             </p>
         </div>
     </div>
@@ -731,9 +732,14 @@
         function realizarCruzamentoEspacial() {
             const raio = parseInt(document.getElementById('raio-analise').value);
             
-            // Área total de Itajaí: 289 km²
+            // Área de Itajaí: 289 km²
             const areaItajai = 289000000; // m²
             const densidadeMedia = populacaoTotalItajai / areaItajai; // pessoas/m²
+            
+            // Percentuais baseados em Itajaí/SC (não Brasil)
+            const percIdosos = 0.19; // 19% da população de Itajaí (aprox. 50.170)
+            const percCriancas = 0.21; // 21% da população de Itajaí (aprox. 55.451)
+            const percDeficientes = 0.067; // 6.7% da população de Itajaí (aprox. 17.692)
             
             areasData.forEach(area => {
                 area.raioInfluencia = raio;
@@ -755,9 +761,9 @@
                 );
                 
                 area.populacao = Math.min(popEstimada, 5000); // Limite máximo por área
-                area.idosos = Math.floor(area.populacao * 0.18); // 18% idosos (SC)
-                area.criancas = Math.floor(area.populacao * 0.22); // 22% crianças
-                area.deficientes = Math.floor(area.populacao * 0.08); // 8% PcD
+                area.idosos = Math.floor(area.populacao * percIdosos);
+                area.criancas = Math.floor(area.populacao * percCriancas);
+                area.deficientes = Math.floor(area.populacao * percDeficientes);
             });
             
             aplicarFiltros();
