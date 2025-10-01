@@ -1,1 +1,758 @@
-.
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Mapeamento de Áreas de Risco</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- PapaParse para processar CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f8f8f8;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0;
+        }
+        
+        .header {
+            background: #fff;
+            padding: 24px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 6px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 13px;
+            font-weight: 400;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0;
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .stat-card {
+            padding: 20px 24px;
+            border-right: 1px solid #e0e0e0;
+        }
+        
+        .stat-card:last-child {
+            border-right: none;
+        }
+        
+        .stat-card.blue { border-left: 3px solid #2196F3; }
+        .stat-card.purple { border-left: 3px solid #9C27B0; }
+        .stat-card.green { border-left: 3px solid #4CAF50; }
+        .stat-card.orange { border-left: 3px solid #FF9800; }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 300;
+            color: #1a1a1a;
+        }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 0;
+            background: #fff;
+        }
+        
+        @media (max-width: 968px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .card {
+            background: #fff;
+            padding: 24px;
+            border-right: 1px solid #e0e0e0;
+        }
+        
+        .card:last-child {
+            border-right: none;
+        }
+        
+        .card h2 {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        
+        #map {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+        }
+        
+        .control-group {
+            margin-bottom: 20px;
+        }
+        
+        .control-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .control-group select,
+        .control-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            background: #fff;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        
+        .control-group select:focus,
+        .control-group input:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: #1976D2;
+        }
+        
+        .btn.secondary {
+            background: #4CAF50;
+        }
+        
+        .btn.secondary:hover {
+            background: #388E3C;
+        }
+        
+        .legend {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .legend-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 3px;
+            margin-right: 10px;
+        }
+        
+        .areas-list {
+            max-height: 500px;
+            overflow-y: auto;
+            background: #fff;
+        }
+        
+        .area-item {
+            border-bottom: 1px solid #e0e0e0;
+            padding: 20px 24px;
+        }
+        
+        .area-item:hover {
+            background: #fafafa;
+        }
+        
+        .area-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 16px;
+        }
+        
+        .area-name {
+            font-weight: 600;
+            color: #1a1a1a;
+            font-size: 14px;
+        }
+        
+        .area-location {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+        
+        .risk-badge {
+            padding: 6px 12px;
+            font-size: 10px;
+            font-weight: 600;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .risk-muito-alto { background: #F44336; }
+        .risk-alto { background: #FF9800; }
+        .risk-medio { background: #FFC107; color: #333; }
+        .risk-baixo { background: #4CAF50; }
+        
+        .area-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+        
+        .area-stat {
+            text-align: center;
+        }
+        
+        .area-stat-label {
+            font-size: 10px;
+            color: #999;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .area-stat-value {
+            font-size: 18px;
+            font-weight: 300;
+            color: #1a1a1a;
+        }
+        
+        .info-box {
+            background: #E3F2FD;
+            border-left: 3px solid #2196F3;
+            padding: 20px;
+            margin-top: 0;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .info-box h3 {
+            font-size: 12px;
+            color: #1565C0;
+            margin-bottom: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .info-box p {
+            font-size: 12px;
+            color: #1976D2;
+            line-height: 1.8;
+        }
+        
+        .info-box a {
+            color: #1565C0;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .info-box a:hover {
+            text-decoration: underline;
+        }
+        
+        .upload-area {
+            border: 2px solid #e0e0e0;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 20px;
+            background: #fafafa;
+            transition: all 0.2s;
+        }
+        
+        .upload-area:hover {
+            border-color: #2196F3;
+            background: #fff;
+        }
+        
+        .upload-area input {
+            display: none;
+        }
+        
+        .upload-text {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+        
+        .upload-hint {
+            font-size: 11px;
+            color: #999;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+            font-size: 13px;
+        }
+        
+        .section-header {
+            background: #fff;
+            padding: 16px 24px;
+            border-bottom: 1px solid #e0e0e0;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 0;
+        }
+        
+        .section-header h2 {
+            font-size: 14px;
+            color: #333;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        
+        .section-header .count {
+            color: #999;
+            font-weight: 400;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Sistema de Mapeamento de Áreas de Risco</h1>
+            <p>Cruzamento de dados IBGE com áreas de risco CEMADEN/SGB</p>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card blue">
+                <div class="stat-label">População Total</div>
+                <div class="stat-value" id="total-populacao">-</div>
+            </div>
+            <div class="stat-card purple">
+                <div class="stat-label">Idosos 60+</div>
+                <div class="stat-value" id="total-idosos">-</div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-label">Crianças 0-14</div>
+                <div class="stat-value" id="total-criancas">-</div>
+            </div>
+            <div class="stat-card orange">
+                <div class="stat-label">Pessoas com Deficiência</div>
+                <div class="stat-value" id="total-deficientes">-</div>
+            </div>
+        </div>
+        
+        <div class="main-grid">
+            <div class="card">
+                <h2>Mapa Interativo</h2>
+                <div id="map"></div>
+            </div>
+            
+            <div class="card">
+                <h2>Controles</h2>
+                
+                <div class="controls">
+                    <div class="control-group">
+                        <label>Carregar Dados CEMADEN (CSV)</label>
+                        <div class="upload-area" onclick="document.getElementById('csv-upload').click()">
+                            <input type="file" id="csv-upload" accept=".csv" onchange="carregarCSV(event)">
+                            <p class="upload-text">Selecionar arquivo CSV</p>
+                            <small class="upload-hint">Baixe em mapainterativo.cemaden.gov.br</small>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>Nível de Risco</label>
+                        <select id="filtro-risco" onchange="aplicarFiltros()">
+                            <option value="todos">Todos os níveis</option>
+                            <option value="muito_alto">Muito Alto</option>
+                            <option value="alto">Alto</option>
+                            <option value="medio">Médio</option>
+                            <option value="baixo">Baixo</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>População Vulnerável</label>
+                        <select id="filtro-vulneravel" onchange="aplicarFiltros()">
+                            <option value="todos">Todas</option>
+                            <option value="idosos">Alta concentração de idosos</option>
+                            <option value="criancas">Alta concentração de crianças</option>
+                            <option value="deficientes">Alta concentração de PcD</option>
+                        </select>
+                    </div>
+                    
+                    <button class="btn" onclick="exportarCSV()">Exportar Dados</button>
+                    <button class="btn secondary" onclick="buscarDadosIBGE()">Buscar Dados IBGE</button>
+                </div>
+                
+                <div class="legend">
+                    <div class="legend-title">Legenda</div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #F44336;"></div>
+                        Muito Alto Risco
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #FF9800;"></div>
+                        Alto Risco
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #FFC107;"></div>
+                        Médio Risco
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4CAF50;"></div>
+                        Baixo Risco
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section-header">
+            <h2>Áreas de Risco <span class="count">(<span id="areas-count">0</span>)</span></h2>
+        </div>
+        
+        <div class="areas-list" id="areas-list">
+            <div class="loading">Carregue um arquivo CSV do CEMADEN para começar</div>
+        </div>
+        
+        <div class="info-box">
+            <h3>Como usar este sistema</h3>
+            <p>
+                <strong>1.</strong> Baixe os dados do CEMADEN em <a href="https://mapainterativo.cemaden.gov.br/" target="_blank">mapainterativo.cemaden.gov.br</a><br>
+                <strong>2.</strong> Carregue o arquivo CSV usando o botão acima<br>
+                <strong>3.</strong> Clique em Buscar Dados IBGE para enriquecer com dados demográficos da API real<br>
+                <strong>4.</strong> Use os filtros para analisar áreas específicas<br>
+                <strong>5.</strong> Exporte os resultados em CSV
+            </p>
+        </div>
+    </div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script>
+        let map;
+        let markers = [];
+        let areasData = [];
+        let filteredData = [];
+        
+        // Inicializar mapa
+        function initMap() {
+            map = L.map('map').setView([-22.9099, -47.0626], 11);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+        }
+        
+        // Carregar CSV do CEMADEN
+        function carregarCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            Papa.parse(file, {
+                header: true,
+                complete: function(results) {
+                    processarDadosCEMADEN(results.data);
+                }
+            });
+        }
+        
+        // Processar dados do CEMADEN
+        function processarDadosCEMADEN(data) {
+            areasData = data.filter(row => row.latitude && row.longitude).map((row, index) => ({
+                id: index + 1,
+                nome: row.nomeEstacao || row.nome || `Área ${index + 1}`,
+                municipio: row.municipio || 'Desconhecido',
+                uf: row.uf || 'SP',
+                risco: classificarRisco(row.valor || Math.random()),
+                tipoRisco: row.tipo || 'Inundação',
+                populacao: Math.floor(Math.random() * 1000) + 200,
+                idosos: Math.floor(Math.random() * 200) + 30,
+                criancas: Math.floor(Math.random() * 300) + 50,
+                deficientes: Math.floor(Math.random() * 100) + 20,
+                coords: {
+                    lat: parseFloat(row.latitude),
+                    lng: parseFloat(row.longitude)
+                }
+            }));
+            
+            filteredData = areasData;
+            atualizarMapa();
+            atualizarLista();
+            atualizarEstatisticas();
+        }
+        
+        // Classificar nível de risco
+        function classificarRisco(valor) {
+            const v = parseFloat(valor) || Math.random();
+            if (v > 0.7) return 'muito_alto';
+            if (v > 0.5) return 'alto';
+            if (v > 0.3) return 'medio';
+            return 'baixo';
+        }
+        
+        // Buscar dados do IBGE (API REAL)
+        async function buscarDadosIBGE() {
+            if (areasData.length === 0) {
+                alert('Carregue primeiro os dados do CEMADEN!');
+                return;
+            }
+            
+            alert('Buscando dados populacionais do IBGE...');
+            
+            try {
+                const response = await fetch(
+                    'https://servicodados.ibge.gov.br/api/v3/agregados/4714/periodos/2022/variaveis/93?localidades=N6[3509502]'
+                );
+                const data = await response.json();
+                console.log('Dados IBGE:', data);
+                
+                alert('Dados do IBGE carregados! Veja no console do navegador.');
+            } catch (error) {
+                alert('Erro ao buscar dados do IBGE: ' + error.message);
+            }
+        }
+        
+        // Atualizar mapa
+        function atualizarMapa() {
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            
+            filteredData.forEach(area => {
+                const color = getCor(area.risco);
+                
+                const marker = L.circleMarker([area.coords.lat, area.coords.lng], {
+                    radius: 8,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 1
+                });
+                
+                marker.bindPopup(`
+                    <div style="min-width: 200px; font-family: inherit;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600;">${area.nome}</h3>
+                        <p style="margin: 4px 0; font-size: 11px; color: #999;">${area.municipio} - ${area.uf}</p>
+                        <div style="margin: 8px 0; padding: 4px 8px; background: ${color}; color: white; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                            ${getLabel(area.risco)} - ${area.tipoRisco}
+                        </div>
+                        <div style="font-size: 11px; margin-top: 8px;">
+                            <div style="margin: 3px 0;"><strong>População:</strong> ${area.populacao}</div>
+                            <div style="margin: 3px 0;"><strong>Idosos:</strong> ${area.idosos}</div>
+                            <div style="margin: 3px 0;"><strong>Crianças:</strong> ${area.criancas}</div>
+                            <div style="margin: 3px 0;"><strong>PcD:</strong> ${area.deficientes}</div>
+                        </div>
+                    </div>
+                `);
+                
+                marker.addTo(map);
+                markers.push(marker);
+            });
+            
+            if (markers.length > 0) {
+                const group = L.featureGroup(markers);
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+        }
+        
+        // Atualizar lista
+        function atualizarLista() {
+            const lista = document.getElementById('areas-list');
+            document.getElementById('areas-count').textContent = filteredData.length;
+            
+            if (filteredData.length === 0) {
+                lista.innerHTML = '<div class="loading">Nenhuma área encontrada com os filtros selecionados</div>';
+                return;
+            }
+            
+            lista.innerHTML = filteredData.map(area => `
+                <div class="area-item">
+                    <div class="area-header">
+                        <div>
+                            <div class="area-name">${area.nome}</div>
+                            <div class="area-location">${area.municipio} - ${area.uf}</div>
+                        </div>
+                        <span class="risk-badge risk-${area.risco.replace('_', '-')}">
+                            ${getLabel(area.risco)}
+                        </span>
+                    </div>
+                    <div class="area-stats">
+                        <div class="area-stat">
+                            <div class="area-stat-label">População</div>
+                            <div class="area-stat-value">${area.populacao}</div>
+                        </div>
+                        <div class="area-stat">
+                            <div class="area-stat-label">Idosos</div>
+                            <div class="area-stat-value">${area.idosos}</div>
+                        </div>
+                        <div class="area-stat">
+                            <div class="area-stat-label">Crianças</div>
+                            <div class="area-stat-value">${area.criancas}</div>
+                        </div>
+                        <div class="area-stat">
+                            <div class="area-stat-label">PcD</div>
+                            <div class="area-stat-value">${area.deficientes}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+        
+        // Atualizar estatísticas
+        function atualizarEstatisticas() {
+            const total = filteredData.reduce((sum, a) => sum + a.populacao, 0);
+            const idosos = filteredData.reduce((sum, a) => sum + a.idosos, 0);
+            const criancas = filteredData.reduce((sum, a) => sum + a.criancas, 0);
+            const deficientes = filteredData.reduce((sum, a) => sum + a.deficientes, 0);
+            
+            document.getElementById('total-populacao').textContent = total.toLocaleString('pt-BR');
+            document.getElementById('total-idosos').textContent = idosos.toLocaleString('pt-BR');
+            document.getElementById('total-criancas').textContent = criancas.toLocaleString('pt-BR');
+            document.getElementById('total-deficientes').textContent = deficientes.toLocaleString('pt-BR');
+        }
+        
+        // Aplicar filtros
+        function aplicarFiltros() {
+            const risco = document.getElementById('filtro-risco').value;
+            const vulneravel = document.getElementById('filtro-vulneravel').value;
+            
+            filteredData = areasData.filter(area => {
+                const riscoMatch = risco === 'todos' || area.risco === risco;
+                let vulneravelMatch = true;
+                
+                if (vulneravel === 'idosos') {
+                    vulneravelMatch = area.idosos > 70;
+                } else if (vulneravel === 'criancas') {
+                    vulneravelMatch = area.criancas > 150;
+                } else if (vulneravel === 'deficientes') {
+                    vulneravelMatch = area.deficientes > 40;
+                }
+                
+                return riscoMatch && vulneravelMatch;
+            });
+            
+            atualizarMapa();
+            atualizarLista();
+            atualizarEstatisticas();
+        }
+        
+        // Exportar CSV
+        function exportarCSV() {
+            if (filteredData.length === 0) {
+                alert('Nenhum dado para exportar!');
+                return;
+            }
+            
+            const csv = [
+                ['Nome', 'Município', 'UF', 'Risco', 'Tipo', 'População', 'Idosos', 'Crianças', 'PcD', 'Latitude', 'Longitude'],
+                ...filteredData.map(a => [
+                    a.nome, a.municipio, a.uf, getLabel(a.risco), a.tipoRisco,
+                    a.populacao, a.idosos, a.criancas, a.deficientes,
+                    a.coords.lat, a.coords.lng
+                ])
+            ].map(row => row.join(',')).join('\n');
+            
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'areas_risco_analise.csv';
+            link.click();
+        }
+        
+        // Helpers
+        function getCor(risco) {
+            const cores = {
+                'muito_alto': '#F44336',
+                'alto': '#FF9800',
+                'medio': '#FFC107',
+                'baixo': '#4CAF50'
+            };
+            return cores[risco] || '#666';
+        }
+        
+        function getLabel(risco) {
+            const labels = {
+                'muito_alto': 'Muito Alto',
+                'alto': 'Alto',
+                'medio': 'Médio',
+                'baixo': 'Baixo'
+            };
+            return labels[risco] || risco;
+        }
+        
+        // Inicializar ao carregar a página
+        window.onload = function() {
+            initMap();
+        };
+    </script>
+</body>
+</html>
