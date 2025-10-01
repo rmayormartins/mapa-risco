@@ -596,6 +596,14 @@
         let populacaoTotalItajai = 264054; // Censo 2022
         let ibgeDataLoaded = false;
         
+        // Dados demográficos de Itajaí
+        const dadosItajai = {
+            populacaoTotal: 264054,
+            idosos: 50170,      // 19% da população
+            criancas: 55451,    // 21% da população
+            deficientes: 17692  // 6.7% da população
+        };
+        
         // Inicializar mapa - Centralizado em Itajaí/SC
         function initMap() {
             map = L.map('map').setView([-26.9077, -48.6616], 13);
@@ -908,15 +916,31 @@
         
         // Atualizar estatísticas
         function atualizarEstatisticas() {
+            if (!ibgeDataLoaded) {
+                // Antes de carregar IBGE, mostra placeholder
+                document.getElementById('total-populacao').textContent = '-';
+                document.getElementById('total-idosos').textContent = '-';
+                document.getElementById('total-criancas').textContent = '-';
+                document.getElementById('total-deficientes').textContent = '-';
+                return;
+            }
+            
+            // Calcular apenas as áreas filtradas
             const total = filteredData.reduce((sum, a) => sum + a.populacao, 0);
             const idosos = filteredData.reduce((sum, a) => sum + a.idosos, 0);
             const criancas = filteredData.reduce((sum, a) => sum + a.criancas, 0);
             const deficientes = filteredData.reduce((sum, a) => sum + a.deficientes, 0);
             
-            document.getElementById('total-populacao').textContent = total > 0 ? total.toLocaleString('pt-BR') : '-';
-            document.getElementById('total-idosos').textContent = idosos > 0 ? idosos.toLocaleString('pt-BR') : '-';
-            document.getElementById('total-criancas').textContent = criancas > 0 ? criancas.toLocaleString('pt-BR') : '-';
-            document.getElementById('total-deficientes').textContent = deficientes > 0 ? deficientes.toLocaleString('pt-BR') : '-';
+            // Limitar aos valores máximos de Itajaí
+            const totalFinal = Math.min(total, dadosItajai.populacaoTotal);
+            const idososFinal = Math.min(idosos, dadosItajai.idosos);
+            const criancasFinal = Math.min(criancas, dadosItajai.criancas);
+            const deficientesFinal = Math.min(deficientes, dadosItajai.deficientes);
+            
+            document.getElementById('total-populacao').textContent = totalFinal.toLocaleString('pt-BR');
+            document.getElementById('total-idosos').textContent = idososFinal.toLocaleString('pt-BR');
+            document.getElementById('total-criancas').textContent = criancasFinal.toLocaleString('pt-BR');
+            document.getElementById('total-deficientes').textContent = deficientesFinal.toLocaleString('pt-BR');
         }
         
         // Aplicar filtros
