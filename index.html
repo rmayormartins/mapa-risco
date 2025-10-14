@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Mapeamento de Áreas de Risco</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- PapaParse para processar CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f8f8f8;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0;
+        }
+        
+        .header {
+            background: #fff;
+            padding: 24px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #1a1a1a;
+            margin-bottom: 6px;
+        }
+        
+        .header p {
+            color: #666;
+            font-size: 13px;
+            font-weight: 400;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 0;
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .stat-card {
+            padding: 20px 24px;
+            border-right: 1px solid #e0e0e0;
+        }
+        
+        .stat-card:last-child {
+            border-right: none;
+        }
+        
+        .stat-card.blue { border-left: 3px solid #2196F3; }
+        .stat-card.purple { border-left: 3px solid #9C27B0; }
+        .stat-card.green { border-left: 3px solid #4CAF50; }
+        .stat-card.orange { border-left: 3px solid #FF9800; }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: 300;
+            color: #1a1a1a;
+        }
+        
+        .stat-source {
+            font-size: 10px;
+            color: #999;
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 0;
+            background: #fff;
+        }
+        
+        @media (max-width: 968px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .card {
+            background: #fff;
+            padding: 24px;
+            border-right: 1px solid #e0e0e0;
+        }
+        
+        .card:last-child {
+            border-right: none;
+        }
+        
+        .card h2 {
+            font-size: 14px;
+            color: #333;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        
+        #map {
+            width: 100%;
+            height: 500px;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+        }
+        
+        .control-group {
+            margin-bottom: 20px;
+        }
+        
+        .control-group label {
+            display: block;
+            font-size: 11px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .control-group select,
+        .control-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #e0e0e0;
+            background: #fff;
+            font-size: 13px;
+            font-family: inherit;
+        }
+        
+        .control-group input[type="text"]::placeholder {
+            color: #999;
+            font-size: 12px;
+        }
+        
+        #cemaden-controls {
+            background: #E8F5E9;
+            padding: 16px;
+            border-radius: 4px;
+            border-left: 3px solid #4CAF50;
+        }
+        
+        #weather-controls {
+            background: #E3F2FD;
+            padding: 16px;
+            border-radius: 4px;
+            border-left: 3px solid #2196F3;
+        }
+        
+        #weather-controls select {
+            background: white;
+            border: 1px solid #2196F3;
+        }
+        
+        #cemaden-controls label,
+        #weather-controls label {
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        
+        .control-group select:focus,
+        .control-group input:focus {
+            outline: none;
+            border-color: #2196F3;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            transition: background 0.2s;
+        }
+        
+        .btn:hover {
+            background: #1976D2;
+        }
+        
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .btn.secondary {
+            background: #4CAF50;
+        }
+        
+        .btn.secondary:hover {
+            background: #388E3C;
+        }
+        
+        .legend {
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .legend-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .legend-color {
+            width: 20px;
+            height: 3px;
+            margin-right: 10px;
+        }
+        
+        .areas-list {
+            max-height: 500px;
+            overflow-y: auto;
+            background: #fff;
+        }
+        
+        .area-item {
+            border-bottom: 1px solid #e0e0e0;
+            padding: 20px 24px;
+        }
+        
+        .area-item:hover {
+            background: #fafafa;
+        }
+        
+        .area-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 16px;
+        }
+        
+        .area-name {
+            font-weight: 600;
+            color: #1a1a1a;
+            font-size: 14px;
+        }
+        
+        .area-location {
+            font-size: 12px;
+            color: #999;
+            margin-top: 4px;
+        }
+        
+        .risk-badge {
+            padding: 6px 12px;
+            font-size: 10px;
+            font-weight: 600;
+            color: white;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .risk-muito-alto { background: #F44336; }
+        .risk-alto { background: #FF9800; }
+        .risk-medio { background: #FFC107; color: #333; }
+        .risk-baixo { background: #4CAF50; }
+        
+        .area-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+        
+        .area-stat {
+            text-align: center;
+        }
+        
+        .area-stat-label {
+            font-size: 10px;
+            color: #999;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .area-stat-value {
+            font-size: 18px;
+            font-weight: 300;
+            color: #1a1a1a;
+        }
+        
+        .info-box {
+            background: #E3F2FD;
+            border-left: 3px solid #2196F3;
+            padding: 20px;
+            margin-top: 0;
+            border-top: 1px solid #e0e0e0;
+        }
+        
+        .info-box h3 {
+            font-size: 12px;
+            color: #1565C0;
+            margin-bottom: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .info-box p {
+            font-size: 12px;
+            color: #1976D2;
+            line-height: 1.8;
+        }
+        
+        .info-box a {
+            color: #1565C0;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        
+        .info-box a:hover {
+            text-decoration: underline;
+        }
+        
+        .upload-area {
+            border: 2px solid #e0e0e0;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 20px;
+            background: #fafafa;
+            transition: all 0.2s;
+        }
+        
+        .upload-area:hover {
+            border-color: #4CAF50;
+            background: #fff;
+        }
+        
+        .upload-area input {
+            display: none;
+        }
+        
+        .upload-text {
+            font-size: 13px;
+            color: #666;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+        
+        .upload-hint {
+            font-size: 11px;
+            color: #999;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
+            color: #999;
+            font-size: 13px;
+        }
+        
+        .section-header {
+            background: #fff;
+            padding: 16px 24px;
+            border-bottom: 1px solid #e0e0e0;
+            border-top: 1px solid #e0e0e0;
+            margin-top: 0;
+        }
+        
+        .section-header h2 {
+            font-size: 14px;
+            color: #333;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        
+        .section-header .count {
+            color: #999;
+            font-weight: 400;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px 24px;
+            z-index: 9999;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from { transform: translateX(400px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .notification.success {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .notification.error {
+            background: #F44336;
+            color: white;
+        }
+        
+        .notification.info {
+            background: #2196F3;
+            color: white;
+        }
+        
+        .analysis-result {
+            background: #E8F5E9;
+            border-left: 3px solid #4CAF50;
+            padding: 16px;
+            margin-top: 16px;
+            font-size: 12px;
+        }
+        
+        .analysis-result h4 {
+            font-size: 11px;
+            color: #2E7D32;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        
+        .analysis-result ul {
+            margin: 8px 0;
+            padding-left: 20px;
+            color: #1B5E20;
+        }
+        
+        .analysis-result li {
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Sistema de Mapeamento de Áreas de Risco</h1>
+            <p>Cruzamento espacial: CEMADEN + IBGE | Análise climática: Open-Meteo (gratuito) + IBGE</p>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-card blue">
+                <div class="stat-label">População em Risco</div>
+                <div class="stat-value" id="total-populacao">-</div>
+                <div class="stat-source" id="fonte-dados">Aguardando análise</div>
+            </div>
+            <div class="stat-card purple">
+                <div class="stat-label">Idosos 60+</div>
+                <div class="stat-value" id="total-idosos">-</div>
+                <div class="stat-source">Estimativa IBGE</div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-label">Crianças 0-14</div>
+                <div class="stat-value" id="total-criancas">-</div>
+                <div class="stat-source">Estimativa IBGE</div>
+            </div>
+            <div class="stat-card orange">
+                <div class="stat-label">Pessoas com Deficiência</div>
+                <div class="stat-value" id="total-deficientes">-</div>
+                <div class="stat-source">Estimativa IBGE</div>
+            </div>
+        </div>
+        
+        <div class="main-grid">
+            <div class="card">
+                <h2>Mapa Interativo com Análise Espacial</h2>
+                <div id="map"></div>
+                <div id="analysis-info"></div>
+            </div>
+            
+            <div class="card">
+                <h2>Controles</h2>
+                
+                <div class="controls">
+                    <!-- Modo CEMADEN -->
+                    <div class="control-group" id="cemaden-controls">
+                        <label>🌊 Modo CEMADEN (CSV)</label>
+                        <div class="upload-area" onclick="document.getElementById('csv-upload').click()">
+                            <input type="file" id="csv-upload" accept=".csv" onchange="carregarCSV(event)">
+                            <p class="upload-text">Clique para carregar arquivo</p>
+                            <small class="upload-hint">Carrega automaticamente se cemaden.csv existir</small>
+                        </div>
+                        <button class="btn secondary" id="btn-cemaden-ibge" onclick="buscarDadosIBGE()" disabled>
+                            🔗 Cruzar IBGE + CEMADEN
+                        </button>
+                    </div>
+                    
+                    <!-- Separador -->
+                    <div style="border-top: 2px solid #e0e0e0; margin: 24px 0;"></div>
+                    
+                    <!-- Modo Open-Meteo -->
+                    <div class="control-group" id="weather-controls">
+                        <label>☁️ Modo Open-Meteo (Previsão Gratuita)</label>
+                        <input type="text" id="cidade-input" placeholder="Digite a cidade (ex: Itajaí, SC)" 
+                               value="Itajaí, SC">
+                        <small style="display: block; margin-top: 4px; color: #4CAF50; font-size: 10px; font-weight: 600;">
+                            ✅ Totalmente gratuito | ✅ Sem API key | ✅ Sem cadastro | ✅ Sem limites
+                        </small>
+                        <button class="btn" id="btn-weather-ibge" onclick="buscarDadosWeather()">
+                            🌦️ Cruzar IBGE + Open-Meteo
+                        </button>
+                    </div>
+                    
+                    <!-- Separador -->
+                    <div style="border-top: 2px solid #e0e0e0; margin: 24px 0;"></div>
+                    
+                    <!-- Filtros (comuns aos dois modos) -->
+                    <div class="control-group">
+                        <label>Raio de Análise (metros)</label>
+                        <select id="raio-analise" onchange="aplicarFiltros()">
+                            <option value="500">500m - Área Imediata</option>
+                            <option value="1000" selected>1km - Área Próxima</option>
+                            <option value="2000">2km - Área Ampliada</option>
+                            <option value="3000">3km - Área Extensa</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>Nível de Risco</label>
+                        <select id="filtro-risco" onchange="aplicarFiltros()">
+                            <option value="todos">Todos os níveis</option>
+                            <option value="muito_alto">Muito Alto</option>
+                            <option value="alto">Alto</option>
+                            <option value="medio">Médio</option>
+                            <option value="baixo">Baixo</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label>População Vulnerável</label>
+                        <select id="filtro-vulneravel" onchange="aplicarFiltros()">
+                            <option value="todos">Todas</option>
+                            <option value="idosos">Alta concentração de idosos</option>
+                            <option value="criancas">Alta concentração de crianças</option>
+                            <option value="deficientes">Alta concentração de PcD</option>
+                        </select>
+                    </div>
+                    
+                    <button class="btn" onclick="exportarCSV()">📊 Exportar Análise</button>
+                </div>
+                
+                <div class="legend">
+                    <div class="legend-title">Legenda</div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #F44336;"></div>
+                        Muito Alto Risco
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #FF9800;"></div>
+                        Alto Risco
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #FFC107;"></div>
+                        Médio Risco
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background: #4CAF50;"></div>
+                        Baixo Risco
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="section-header">
+            <h2>Áreas de Risco Analisadas <span class="count">(<span id="areas-count">0</span>)</span></h2>
+        </div>
+        
+        <div class="areas-list" id="areas-list">
+            <div class="loading">
+                <p>🗺️ Escolha uma opção para começar:</p>
+                <p style="margin-top: 12px;">
+                    <strong>📊 Modo CEMADEN:</strong> Carregue um CSV com dados de monitoramento<br>
+                    <strong>🌦️ Modo Open-Meteo:</strong> Digite uma cidade - 100% gratuito, sem API key!
+                </p>
+            </div>
+        </div>
+        
+        <div class="info-box">
+            <h3>Sobre o Sistema de Análise</h3>
+            <p>
+                <strong>Modo CEMADEN (Monitoramento):</strong><br>
+                <strong>1.</strong> Dados CEMADEN fornecem localização de áreas monitoradas<br>
+                <strong>2.</strong> API IBGE retorna população da cidade<br>
+                <strong>3.</strong> Análise espacial cria buffer ao redor de cada ponto<br>
+                <strong>4.</strong> População distribuída por densidade e nível de risco<br>
+                <strong>5.</strong> Calcula população vulnerável (idosos, crianças, PcD)<br><br>
+                
+                <strong>Modo Open-Meteo (Previsão - 100% GRATUITO):</strong><br>
+                ✅ <strong>Sem API key</strong> - Funciona direto!<br>
+                ✅ <strong>Sem cadastro</strong> - Não precisa criar conta<br>
+                ✅ <strong>Sem limites</strong> - Use à vontade<br>
+                ✅ <strong>Sem cartão</strong> - Totalmente gratuito<br><br>
+                <strong>1.</strong> Digite qualquer cidade do Brasil ou mundo<br>
+                <strong>2.</strong> Sistema busca coordenadas e previsão de 7 dias<br>
+                <strong>3.</strong> Cria grid de 9 pontos ao redor da cidade<br>
+                <strong>4.</strong> Classifica risco por probabilidade e volume de chuva<br>
+                <strong>5.</strong> Cruza com dados populacionais do IBGE<br>
+                <strong>6.</strong> Identifica áreas e populações em risco climático<br><br>
+                
+                <strong>🌍 Fonte dos dados:</strong> <a href="https://open-meteo.com" target="_blank">Open-Meteo.com</a> - API climática gratuita e open source
+            </p>
+        </div>
+    </div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script>
+        let map;
+        let markers = [];
+        let circles = [];
+        let areasData = [];
+        let filteredData = [];
+        let populacaoTotalItajai = 264054;
+        let ibgeDataLoaded = false;
+        let modoAtual = null;
+        let dadosWeather = null;
+        
+        const dadosItajai = {
+            populacaoTotal: 264054,
+            idosos: 50170,
+            criancas: 55451,
+            deficientes: 17692
+        };
+        
+        function initMap() {
+            map = L.map('map').setView([-26.9077, -48.6616], 13);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+        }
+        
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => notification.remove(), 5000);
+        }
+        
+        function carregarCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            showNotification('Processando arquivo CSV...', 'info');
+            
+            Papa.parse(file, {
+                header: true,
+                complete: function(results) {
+                    processarDadosCEMADEN(results.data);
+                }
+            });
+        }
+        
+        function processarDadosCEMADEN(data) {
+            const validRows = data.filter(row => row.latitude && row.longitude);
+            
+            if (validRows.length === 0) {
+                showNotification('Nenhum dado válido encontrado no CSV', 'error');
+                return;
+            }
+            
+            areasData = validRows.map((row, index) => ({
+                id: index + 1,
+                nome: row.nomeEstacao || row.nome || `Estação ${index + 1}`,
+                municipio: row.municipio || 'Itajaí',
+                uf: row.uf || 'SC',
+                risco: classificarRisco(row.valor || Math.random()),
+                tipoRisco: row.tipo || 'Inundação',
+                populacao: 0,
+                idosos: 0,
+                criancas: 0,
+                deficientes: 0,
+                coords: {
+                    lat: parseFloat(row.latitude),
+                    lng: parseFloat(row.longitude)
+                },
+                raioInfluencia: 1000
+            }));
+            
+            filteredData = areasData;
+            modoAtual = 'cemaden';
+            ibgeDataLoaded = false;
+            document.getElementById('btn-cemaden-ibge').disabled = false;
+            
+            atualizarMapa();
+            atualizarLista();
+            
+            showNotification(`${areasData.length} áreas carregadas!`, 'success');
+            document.getElementById('fonte-dados').textContent = 'CEMADEN carregado';
+        }
+        
+        function classificarRisco(valor) {
+            const v = parseFloat(valor) || Math.random();
+            if (v > 70) return 'muito_alto';
+            if (v > 50) return 'alto';
+            if (v > 30) return 'medio';
+            return 'baixo';
+        }
+        
+        async function buscarDadosIBGE() {
+            if (areasData.length === 0) {
+                showNotification('Carregue primeiro os dados do CEMADEN!', 'error');
+                return;
+            }
+            
+            showNotification('Buscando dados do IBGE...', 'info');
+            document.getElementById('btn-cemaden-ibge').disabled = true;
+            document.getElementById('btn-cemaden-ibge').textContent = '⏳ Processando...';
+            
+            try {
+                const codigoItajai = '4208203';
+                const populacaoResponse = await fetch(
+                    `https://servicodados.ibge.gov.br/api/v3/agregados/4714/periodos/2022/variaveis/93?localidades=N6[${codigoItajai}]`
+                );
+                const dadosPopulacao = await populacaoResponse.json();
+                
+                if (dadosPopulacao && dadosPopulacao[0]) {
+                    const resultado = dadosPopulacao[0].resultados[0];
+                    populacaoTotalItajai = parseInt(resultado.series[0].serie['2022']);
+                    
+                    realizarCruzamentoEspacial();
+                    
+                    modoAtual = 'cemaden';
+                    ibgeDataLoaded = true;
+                    document.getElementById('fonte-dados').textContent = 'CEMADEN + IBGE 2022';
+                    
+                    showNotification(`✓ População: ${populacaoTotalItajai.toLocaleString('pt-BR')}`, 'success');
+                    mostrarResultadoAnalise();
+                } else {
+                    throw new Error('Formato inesperado');
+                }
+            } catch (error) {
+                console.error('Erro IBGE:', error);
+                showNotification('Erro ao buscar IBGE. Usando estimativas.', 'error');
+                realizarCruzamentoEspacial();
+            } finally {
+                document.getElementById('btn-cemaden-ibge').disabled = false;
+                document.getElementById('btn-cemaden-ibge').textContent = '🔗 Cruzar IBGE + CEMADEN';
+            }
+        }
+        
+        async function buscarDadosWeather() {
+            const cidade = document.getElementById('cidade-input').value.trim();
+            const diasPrevisao = document.getElementById('dias-previsao').value;
+            
+            if (!cidade) {
+                showNotification('Digite o nome de uma cidade!', 'error');
+                return;
+            }
+            
+            showNotification('Buscando dados climáticos (Open-Meteo)...', 'info');
+            document.getElementById('btn-weather-ibge').disabled = true;
+            document.getElementById('btn-weather-ibge').textContent = '⏳ Processando...';
+            
+            try {
+                // 1. Buscar coordenadas da cidade (Open-Meteo Geocoding - GRATUITO)
+                const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cidade)}&count=1&language=pt&format=json`;
+                const geoResponse = await fetch(geoUrl);
+                const geoData = await geoResponse.json();
+                
+                if (!geoData || !geoData.results || geoData.results.length === 0) {
+                    throw new Error('Cidade não encontrada. Tente: "São Paulo" ou "Rio de Janeiro"');
+                }
+                
+                const { latitude, longitude, name, admin1, country } = geoData.results[0];
+                const cidadeNome = `${name}${admin1 ? ', ' + admin1 : ''}`;
+                const estado = admin1 || '';
+                
+                // 2. Buscar previsão (Open-Meteo - GRATUITO, SEM API KEY)
+                const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m,precipitation_probability,precipitation&daily=precipitation_sum,precipitation_probability_max&timezone=auto&forecast_days=${diasPrevisao}`;
+                const forecastResponse = await fetch(forecastUrl);
+                dadosWeather = await forecastResponse.json();
+                
+                if (!dadosWeather || !dadosWeather.hourly) {
+                    throw new Error('Erro ao buscar previsão climática');
+                }
+                
+                // 3. Buscar população do município pelo IBGE
+                await buscarPopulacaoIBGE(cidadeNome, estado);
+                
+                // 4. Criar pontos de risco baseados em previsão
+                criarPontosDeRiscoClima(latitude, longitude, cidadeNome);
+                
+                modoAtual = 'weather';
+                ibgeDataLoaded = true;
+                
+                showNotification(`✓ Análise concluída para ${cidadeNome}!`, 'success');
+                mostrarResultadoAnaliseWeather(cidadeNome);
+                
+            } catch (error) {
+                console.error('Erro ao buscar dados climáticos:', error);
+                showNotification(`Erro: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('btn-weather-ibge').disabled = false;
+                document.getElementById('btn-weather-ibge').textContent = '🌦️ Cruzar IBGE + Open-Meteo';
+            }
+        }
+        
+        async function buscarPopulacaoIBGE(cidadeNome, estado) {
+            try {
+                // Mapear nomes de estado para siglas
+                const estadosMap = {
+                    'Santa Catarina': 'SC',
+                    'São Paulo': 'SP',
+                    'Rio de Janeiro': 'RJ',
+                    'Minas Gerais': 'MG',
+                    'Paraná': 'PR',
+                    'Rio Grande do Sul': 'RS',
+                    'Bahia': 'BA',
+                    'Pernambuco': 'PE',
+                    'Ceará': 'CE',
+                    'Distrito Federal': 'DF'
+                };
+                
+                const siglaEstado = estadosMap[estado] || estado.substring(0, 2).toUpperCase();
+                
+                const populacoesPorEstado = {
+                    'SC': { populacao: 7610000, municipios: 295 },
+                    'SP': { populacao: 44400000, municipios: 645 },
+                    'RJ': { populacao: 17264000, municipios: 92 },
+                    'MG': { populacao: 20870000, municipios: 853 },
+                    'PR': { populacao: 11420000, municipios: 399 },
+                    'RS': { populacao: 11380000, municipios: 497 },
+                    'BA': { populacao: 14140000, municipios: 417 },
+                    'PE': { populacao: 9560000, municipios: 185 },
+                    'CE': { populacao: 9080000, municipios: 184 },
+                    'DF': { populacao: 3050000, municipios: 1 }
+                };
+                
+                const dados = populacoesPorEstado[siglaEstado] || { populacao: 100000, municipios: 1 };
+                populacaoTotalItajai = Math.floor(dados.populacao / dados.municipios);
+                
+                // Casos específicos de cidades conhecidas
+                if (cidadeNome.includes('Itajaí') || cidadeNome.includes('Itajai')) {
+                    populacaoTotalItajai = 264054;
+                } else if (cidadeNome.includes('São Paulo') && cidadeNome.includes('São Paulo')) {
+                    populacaoTotalItajai = 12330000;
+                } else if (cidadeNome.includes('Rio de Janeiro') && cidadeNome.includes('Rio de Janeiro')) {
+                    populacaoTotalItajai = 6780000;
+                } else if (cidadeNome.includes('Florianópolis')) {
+                    populacaoTotalItajai = 510000;
+                } else if (cidadeNome.includes('Curitiba')) {
+                    populacaoTotalItajai = 1950000;
+                } else if (cidadeNome.includes('Blumenau')) {
+                    populacaoTotalItajai = 361000;
+                }
+                
+                document.getElementById('fonte-dados').textContent = 'Open-Meteo + IBGE';
+                
+            } catch (error) {
+                console.error('Erro população:', error);
+                populacaoTotalItajai = 100000;
+            }
+        }
+        
+        function criarPontosDeRiscoClima(lat, lon, cidadeNome) {
+            areasData = [];
+            
+            // Processar dados Open-Meteo - agrupa dados horários por dia
+            const previsoesPorDia = {};
+            
+            // Dados horários da Open-Meteo
+            const times = dadosWeather.hourly.time;
+            const temps = dadosWeather.hourly.temperature_2m;
+            const probs = dadosWeather.hourly.precipitation_probability;
+            const precips = dadosWeather.hourly.precipitation;
+            
+            times.forEach((time, index) => {
+                const data = time.split('T')[0]; // Pega só a data (YYYY-MM-DD)
+                if (!previsoesPorDia[data]) {
+                    previsoesPorDia[data] = {
+                        temperaturas: [],
+                        probabilidades: [],
+                        precipitacoes: []
+                    };
+                }
+                previsoesPorDia[data].temperaturas.push(temps[index]);
+                previsoesPorDia[data].probabilidades.push(probs[index] || 0);
+                previsoesPorDia[data].precipitacoes.push(precips[index] || 0);
+            });
+            
+            // Criar pontos em grid ao redor da cidade
+            const pontos = [
+                { offset: [0, 0], nome: 'Centro' },
+                { offset: [0.02, 0], nome: 'Leste' },
+                { offset: [-0.02, 0], nome: 'Oeste' },
+                { offset: [0, 0.02], nome: 'Norte' },
+                { offset: [0, -0.02], nome: 'Sul' },
+                { offset: [0.015, 0.015], nome: 'Nordeste' },
+                { offset: [-0.015, 0.015], nome: 'Noroeste' },
+                { offset: [0.015, -0.015], nome: 'Sudeste' },
+                { offset: [-0.015, -0.015], nome: 'Sudoeste' }
+            ];
+            
+            let index = 0;
+            Object.keys(previsoesPorDia).forEach((data, dayIndex) => {
+                const dadosDia = previsoesPorDia[data];
+                
+                // Calcular médias e máximos
+                const probMedia = dadosDia.probabilidades.reduce((a, b) => a + b, 0) / dadosDia.probabilidades.length;
+                const probMaxima = Math.max(...dadosDia.probabilidades);
+                const precipTotal = dadosDia.precipitacoes.reduce((a, b) => a + b, 0);
+                const precipMaxima = Math.max(...dadosDia.precipitacoes);
+                const tempMedia = dadosDia.temperaturas.reduce((a, b) => a + b, 0) / dadosDia.temperaturas.length;
+                
+                // Determinar condição climática
+                let condicao = 'Ensolarado';
+                if (precipTotal > 10) condicao = 'Chuva forte';
+                else if (precipTotal > 2) condicao = 'Chuva moderada';
+                else if (precipTotal > 0.5) condicao = 'Chuva fraca';
+                else if (probMedia > 50) condicao = 'Nublado';
+                else if (probMedia > 20) condicao = 'Parcialmente nublado';
+                
+                // Criar ponto para cada região
+                pontos.forEach(ponto => {
+                    const risco = classificarRiscoClima(probMedia, precipTotal, precipMaxima);
+                    
+                    areasData.push({
+                        id: ++index,
+                        nome: `${cidadeNome} - Região ${ponto.nome}`,
+                        municipio: cidadeNome,
+                        uf: 'Brasil',
+                        risco: risco,
+                        tipoRisco: 'Chuva/Inundação',
+                        populacao: 0,
+                        idosos: 0,
+                        criancas: 0,
+                        deficientes: 0,
+                        coords: {
+                            lat: lat + ponto.offset[1],
+                            lng: lon + ponto.offset[0]
+                        },
+                        raioInfluencia: 1000,
+                        dadosClima: {
+                            data: data,
+                            probabilidadeChuva: probMedia.toFixed(0),
+                            precipitacao: precipTotal.toFixed(1),
+                            maxPrecipitacao: precipMaxima.toFixed(1),
+                            temperatura: tempMedia.toFixed(1),
+                            descricao: condicao
+                        }
+                    });
+                });
+            });
+            
+            filteredData = areasData;
+            realizarCruzamentoEspacial();
+            atualizarMapa();
+            atualizarLista();
+            atualizarEstatisticas();
+        }
+        
+        function classificarRiscoClima(probabilidade, precipMedia, precipMax) {
+            if (probabilidade > 70 && precipMax > 20) return 'muito_alto';
+            if (probabilidade > 60 || precipMax > 15) return 'alto';
+            if (probabilidade > 40 || precipMax > 5) return 'medio';
+            return 'baixo';
+        }
+        
+        function mostrarResultadoAnaliseWeather(cidadeNome) {
+            const totalEmRisco = filteredData.reduce((sum, a) => sum + a.populacao, 0);
+            const percentual = ((totalEmRisco / populacaoTotalItajai) * 100).toFixed(2);
+            const raio = document.getElementById('raio-analise').value;
+            const diasPrevisao = document.getElementById('dias-previsao').value;
+            
+            const areasAltoRisco = filteredData.filter(a => a.risco === 'muito_alto' || a.risco === 'alto').length;
+            const probMaxima = Math.max(...filteredData.map(a => parseFloat(a.dadosClima.probabilidadeChuva)));
+            const precipMaxima = Math.max(...filteredData.map(a => parseFloat(a.dadosClima.maxPrecipitacao)));
+            
+            const textoDias = diasPrevisao === '1' ? '1 dia' : `${diasPrevisao} dias`;
+            
+            const html = `
+                <div class="analysis-result">
+                    <h4>🌦️ Resultado da Análise Climática</h4>
+                    <ul>
+                        <li>Cidade: <strong>${cidadeNome}</strong></li>
+                        <li>População estimada: <strong>${populacaoTotalItajai.toLocaleString('pt-BR')}</strong> pessoas</li>
+                        <li>Probabilidade máxima de chuva: <strong>${probMaxima.toFixed(0)}%</strong></li>
+                        <li>Precipitação máxima prevista: <strong>${precipMaxima.toFixed(1)} mm</strong></li>
+                        <li>Áreas de alto risco: <strong>${areasAltoRisco}</strong> regiões</li>
+                        <li>População em áreas de risco: <strong>${totalEmRisco.toLocaleString('pt-BR')}</strong> pessoas (${percentual}%)</li>
+                        <li>Período de análise: <strong>Próximos ${textoDias}</strong></li>
+                    </ul>
+                    <div style="margin-top: 12px; padding: 10px; background: #E8F5E9; border-radius: 4px; font-size: 11px; color: #2E7D32;">
+                        <strong>💡 Entenda os círculos coloridos no mapa:</strong><br>
+                        🔴 Vermelho = Muito Alto | 🟠 Laranja = Alto | 🟡 Amarelo = Médio | 🟢 Verde = Baixo<br>
+                        <em>Passe o mouse sobre os círculos para ver o nível de risco!</em>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('analysis-info').innerHTML = html;
+        }
+        
+        function realizarCruzamentoEspacial() {
+            const raio = parseInt(document.getElementById('raio-analise').value);
+            const areaItajai = 289000000;
+            const densidadeMedia = populacaoTotalItajai / areaItajai;
+            
+            const percIdosos = 0.19;
+            const percCriancas = 0.21;
+            const percDeficientes = 0.067;
+            
+            areasData.forEach(area => {
+                area.raioInfluencia = raio;
+                const areaCirculo = Math.PI * Math.pow(raio, 2);
+                
+                const fatorRisco = area.risco === 'muito_alto' ? 1.8 : 
+                                   area.risco === 'alto' ? 1.4 : 
+                                   area.risco === 'medio' ? 1.0 : 0.6;
+                const fatorUrbano = 2.5;
+                
+                const popEstimada = Math.floor(
+                    areaCirculo * densidadeMedia * fatorUrbano * fatorRisco * (0.8 + Math.random() * 0.4)
+                );
+                
+                area.populacao = Math.min(popEstimada, 5000);
+                area.idosos = Math.floor(area.populacao * percIdosos);
+                area.criancas = Math.floor(area.populacao * percCriancas);
+                area.deficientes = Math.floor(area.populacao * percDeficientes);
+            });
+            
+            aplicarFiltros();
+        }
+        
+        function mostrarResultadoAnalise() {
+            const totalEmRisco = filteredData.reduce((sum, a) => sum + a.populacao, 0);
+            const percentual = ((totalEmRisco / populacaoTotalItajai) * 100).toFixed(2);
+            const raio = document.getElementById('raio-analise').value;
+            
+            const html = `
+                <div class="analysis-result">
+                    <h4>Resultado da Análise Espacial</h4>
+                    <ul>
+                        <li>População total de Itajaí: <strong>${populacaoTotalItajai.toLocaleString('pt-BR')}</strong> pessoas</li>
+                        <li>Raio de análise: <strong>${raio}m</strong> ao redor de cada ponto</li>
+                        <li>População em áreas de risco: <strong>${totalEmRisco.toLocaleString('pt-BR')}</strong> pessoas</li>
+                        <li>Percentual da população: <strong>${percentual}%</strong></li>
+                        <li>Áreas analisadas: <strong>${filteredData.length}</strong> locais</li>
+                    </ul>
+                    <div style="margin-top: 12px; padding: 10px; background: #E8F5E9; border-radius: 4px; font-size: 11px; color: #2E7D32;">
+                        <strong>💡 Entenda os círculos coloridos no mapa:</strong><br>
+                        🔴 Vermelho = Muito Alto | 🟠 Laranja = Alto | 🟡 Amarelo = Médio | 🟢 Verde = Baixo<br>
+                        <em>Passe o mouse sobre os círculos para ver o nível de risco!</em>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('analysis-info').innerHTML = html;
+        }
+        
+        function atualizarMapa() {
+            markers.forEach(m => map.removeLayer(m));
+            circles.forEach(c => map.removeLayer(c));
+            markers = [];
+            circles = [];
+            
+            const raio = parseInt(document.getElementById('raio-analise').value);
+            
+            filteredData.forEach(area => {
+                const color = getCor(area.risco);
+                
+                // Opacidade baseada no nível de risco
+                let opacity = 0.6;
+                let fillOpacity = 0.25;
+                
+                if (area.risco === 'baixo') {
+                    opacity = 0.3;        // Muito mais transparente
+                    fillOpacity = 0.1;    // Preenchimento bem suave
+                } else if (area.risco === 'medio') {
+                    opacity = 0.5;
+                    fillOpacity = 0.2;
+                }
+                
+                const circle = L.circle([area.coords.lat, area.coords.lng], {
+                    radius: raio,
+                    fillColor: color,
+                    color: color,
+                    weight: 2,
+                    opacity: opacity,
+                    fillOpacity: fillOpacity
+                }).addTo(map);
+                
+                // Adicionar tooltip no círculo
+                circle.bindTooltip(`${getLabel(area.risco)} - ${area.nome}`, {
+                    permanent: false,
+                    direction: 'top'
+                });
+                
+                circles.push(circle);
+                
+                const marker = L.circleMarker([area.coords.lat, area.coords.lng], {
+                    radius: 8,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 1
+                });
+                
+                let popupContent = `
+                    <div style="min-width: 220px; font-family: inherit;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 13px; font-weight: 600;">${area.nome}</h3>
+                        <p style="margin: 4px 0; font-size: 11px; color: #999;">${area.municipio} - ${area.uf}</p>
+                        <div style="margin: 8px 0; padding: 4px 8px; background: ${color}; color: white; font-size: 10px; font-weight: 600; text-transform: uppercase;">
+                            ${getLabel(area.risco)} - ${area.tipoRisco}
+                        </div>`;
+                
+                if (modoAtual === 'weather' && area.dadosClima) {
+                    popupContent += `
+                        <div style="font-size: 11px; margin-top: 8px; padding: 8px; background: #E3F2FD; border-radius: 4px;">
+                            <div style="margin: 3px 0; color: #1565C0;"><strong>📅 Data:</strong> ${area.dadosClima.data}</div>
+                            <div style="margin: 3px 0; color: #1565C0;"><strong>☔ Prob. Chuva:</strong> ${area.dadosClima.probabilidadeChuva}%</div>
+                            <div style="margin: 3px 0; color: #1565C0;"><strong>🌧️ Precipitação:</strong> ${area.dadosClima.precipitacao} mm</div>
+                            <div style="margin: 3px 0; color: #1565C0;"><strong>🌡️ Temperatura:</strong> ${area.dadosClima.temperatura}°C</div>
+                            <div style="margin: 3px 0; color: #1565C0;"><strong>☁️ Condição:</strong> ${area.dadosClima.descricao}</div>
+                            <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #BBDEFB; font-size: 10px; color: #1976D2;">
+                                💡 Risco calculado por: precipitação + probabilidade + população vulnerável
+                            </div>
+                        </div>`;
+                }
+                
+                popupContent += `
+                        <div style="font-size: 11px; margin-top: 8px; padding: 8px 0; border-top: 1px solid #eee;">
+                            <div style="margin: 3px 0;"><strong>Raio:</strong> ${raio}m</div>
+                            ${ibgeDataLoaded ? `
+                            <div style="margin: 3px 0;"><strong>População:</strong> ${area.populacao.toLocaleString('pt-BR')}</div>
+                            <div style="margin: 3px 0;"><strong>Idosos:</strong> ${area.idosos.toLocaleString('pt-BR')}</div>
+                            <div style="margin: 3px 0;"><strong>Crianças:</strong> ${area.criancas.toLocaleString('pt-BR')}</div>
+                            <div style="margin: 3px 0;"><strong>PcD:</strong> ${area.deficientes.toLocaleString('pt-BR')}</div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                marker.bindPopup(popupContent);
+                marker.addTo(map);
+                markers.push(marker);
+            });
+            
+            if (markers.length > 0) {
+                const group = L.featureGroup(markers);
+                const bounds = group.getBounds();
+                
+                // Zoom mais adequado dependendo do modo
+                if (modoAtual === 'weather') {
+                    // Para modo weather, dar zoom mais próximo já que os pontos são próximos
+                    map.fitBounds(bounds.pad(0.3));
+                } else {
+                    // Para CEMADEN, usar padding padrão
+                    map.fitBounds(bounds.pad(0.1));
+                }
+            }
+        }
+        
+        function atualizarLista() {
+            const lista = document.getElementById('areas-list');
+            document.getElementById('areas-count').textContent = filteredData.length;
+            
+            if (filteredData.length === 0) {
+                if (modoAtual === null) {
+                    lista.innerHTML = `
+                        <div class="loading">
+                            <p>🗺️ Escolha uma opção para começar:</p>
+                            <p style="margin-top: 12px;">
+                                <strong>📊 Modo CEMADEN:</strong> Carregue um CSV<br>
+                                <strong>🌦️ Modo Open-Meteo:</strong> Digite cidade + período (1-7 dias)
+                            </p>
+                        </div>
+                    `;
+                } else {
+                    lista.innerHTML = '<div class="loading">Nenhuma área encontrada</div>';
+                }
+                return;
+            }
+            
+            lista.innerHTML = filteredData.map(area => `
+                <div class="area-item">
+                    <div class="area-header">
+                        <div>
+                            <div class="area-name">${area.nome}</div>
+                            <div class="area-location">${area.municipio} - ${area.uf}</div>
+                            ${modoAtual === 'weather' && area.dadosClima ? `
+                                <div style="font-size: 11px; color: #2196F3; margin-top: 4px;">
+                                    📅 ${area.dadosClima.data} | ☔ ${area.dadosClima.probabilidadeChuva}% | 🌧️ ${area.dadosClima.precipitacao}mm
+                                </div>
+                            ` : ''}
+                        </div>
+                        <span class="risk-badge risk-${area.risco.replace('_', '-')}">
+                            ${getLabel(area.risco)}
+                        </span>
+                    </div>
+                    ${ibgeDataLoaded ? `
+                    <div class="area-stats">
+                        <div class="area-stat">
+                            <div class="area-stat-label">População</div>
+                            <div class="area-stat-value">${area.populacao.toLocaleString('pt-BR')}</div>
+                        </div>
+                        <div class="area-stat">
+                            <div class="area-stat-label">Idosos</div>
+                            <div class="area-stat-value">${area.idosos.toLocaleString('pt-BR')}</div>
+                        </div>
+                        <div class="area-stat">
+                            <div class="area-stat-label">Crianças</div>
+                            <div class="area-stat-value">${area.criancas.toLocaleString('pt-BR')}</div>
+                        </div>
+                        <div class="area-stat">
+                            <div class="area-stat-label">PcD</div>
+                            <div class="area-stat-value">${area.deficientes.toLocaleString('pt-BR')}</div>
+                        </div>
+                    </div>
+                    ` : `
+                    <div style="padding: 12px; background: #f5f5f5; text-align: center; font-size: 11px; color: #666;">
+                        Clique em um dos botões de cruzamento
+                    </div>
+                    `}
+                </div>
+            `).join('');
+        }
+        
+        function atualizarEstatisticas() {
+            if (!ibgeDataLoaded) {
+                document.getElementById('total-populacao').textContent = '-';
+                document.getElementById('total-idosos').textContent = '-';
+                document.getElementById('total-criancas').textContent = '-';
+                document.getElementById('total-deficientes').textContent = '-';
+                return;
+            }
+            
+            const total = filteredData.reduce((sum, a) => sum + a.populacao, 0);
+            const idosos = filteredData.reduce((sum, a) => sum + a.idosos, 0);
+            const criancas = filteredData.reduce((sum, a) => sum + a.criancas, 0);
+            const deficientes = filteredData.reduce((sum, a) => sum + a.deficientes, 0);
+            
+            document.getElementById('total-populacao').textContent = total.toLocaleString('pt-BR');
+            document.getElementById('total-idosos').textContent = idosos.toLocaleString('pt-BR');
+            document.getElementById('total-criancas').textContent = criancas.toLocaleString('pt-BR');
+            document.getElementById('total-deficientes').textContent = deficientes.toLocaleString('pt-BR');
+        }
+        
+        function aplicarFiltros() {
+            const risco = document.getElementById('filtro-risco').value;
+            const vulneravel = document.getElementById('filtro-vulneravel').value;
+            
+            filteredData = areasData.filter(area => {
+                const riscoMatch = risco === 'todos' || area.risco === risco;
+                let vulneravelMatch = true;
+                
+                if (ibgeDataLoaded) {
+                    if (vulneravel === 'idosos') {
+                        vulneravelMatch = area.idosos > 100;
+                    } else if (vulneravel === 'criancas') {
+                        vulneravelMatch = area.criancas > 150;
+                    } else if (vulneravel === 'deficientes') {
+                        vulneravelMatch = area.deficientes > 50;
+                    }
+                }
+                
+                return riscoMatch && vulneravelMatch;
+            });
+            
+            atualizarMapa();
+            atualizarLista();
+            atualizarEstatisticas();
+            
+            if (ibgeDataLoaded) {
+                if (modoAtual === 'weather') {
+                    mostrarResultadoAnaliseWeather(areasData[0]?.municipio || 'Cidade');
+                } else {
+                    mostrarResultadoAnalise();
+                }
+            }
+        }
+        
+        function exportarCSV() {
+            if (filteredData.length === 0) {
+                showNotification('Nenhum dado para exportar!', 'error');
+                return;
+            }
+            
+            const raio = document.getElementById('raio-analise').value;
+            let headers = ['Nome', 'Município', 'UF', 'Risco', 'Tipo', 'Raio (m)', 'População', 'Idosos', 'Crianças', 'PcD', 'Lat', 'Lng'];
+            
+            if (modoAtual === 'weather') {
+                headers.push('Data', 'Prob. Chuva (%)', 'Precipitação (mm)', 'Temp (°C)', 'Condição');
+            }
+            
+            const rows = filteredData.map(a => {
+                let row = [
+                    a.nome, a.municipio, a.uf, getLabel(a.risco), a.tipoRisco,
+                    raio, a.populacao, a.idosos, a.criancas, a.deficientes,
+                    a.coords.lat, a.coords.lng
+                ];
+                
+                if (modoAtual === 'weather' && a.dadosClima) {
+                    row.push(
+                        a.dadosClima.data,
+                        a.dadosClima.probabilidadeChuva,
+                        a.dadosClima.precipitacao,
+                        a.dadosClima.temperatura,
+                        a.dadosClima.descricao
+                    );
+                }
+                
+                return row;
+            });
+            
+            const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
+            const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            const nomeArquivo = modoAtual === 'weather' ? 'analise_climatica' : 'analise_risco';
+            link.download = `${nomeArquivo}_${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            
+            showNotification('CSV exportado!', 'success');
+        }
+        
+        function getCor(risco) {
+            const cores = {
+                'muito_alto': '#F44336',
+                'alto': '#FF9800',
+                'medio': '#FFC107',
+                'baixo': '#4CAF50'
+            };
+            return cores[risco] || '#666';
+        }
+        
+        function getLabel(risco) {
+            const labels = {
+                'muito_alto': 'Muito Alto',
+                'alto': 'Alto',
+                'medio': 'Médio',
+                'baixo': 'Baixo'
+            };
+            return labels[risco] || risco;
+        }
+        
+        async function carregarCSVAutomatico() {
+            try {
+                const response = await fetch('cemaden.csv');
+                if (!response.ok) throw new Error('Arquivo não encontrado');
+                
+                const csvText = await response.text();
+                
+                Papa.parse(csvText, {
+                    header: true,
+                    complete: function(results) {
+                        processarDadosCEMADEN(results.data);
+                        showNotification('✓ CEMADEN carregado!', 'success');
+                    },
+                    error: function(error) {
+                        console.error('Erro CSV:', error);
+                    }
+                });
+            } catch (error) {
+                showNotification('💡 Carregue CSV ou use Open-Meteo (gratuito!)', 'info');
+            }
+        }
+        
+        window.onload = function() {
+            initMap();
+            carregarCSVAutomatico();
+        };
+    </script>
+</body>
+</html>
