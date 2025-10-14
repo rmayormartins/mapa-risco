@@ -542,11 +542,15 @@
                     <!-- Modo Open-Meteo -->
                     <div class="control-group" id="weather-controls">
                         <label>☁️ Modo Open-Meteo (Previsão Gratuita)</label>
-                        <input type="text" id="cidade-input" placeholder="Digite a cidade (ex: Itajaí, SC)" 
-                               value="Itajaí, SC">
-                        <small style="display: block; margin-top: 4px; color: #4CAF50; font-size: 10px; font-weight: 600;">
-                            ✅ Totalmente gratuito | ✅ Sem API key | ✅ Sem cadastro | ✅ Sem limites
-                        </small>
+                        <input type="text" id="cidade-input" placeholder="Digite a cidade (ex: Itajaí)" 
+                               value="Itajaí">
+                        <label style="margin-top: 12px; margin-bottom: 6px;">📅 Período de Previsão</label>
+                        <select id="dias-previsao">
+                            <option value="1">📆 1 dia</option>
+                            <option value="3">📆 3 dias</option>
+                            <option value="5">📆 5 dias</option>
+                            <option value="7" selected>📆 7 dias (recomendado)</option>
+                        </select>
                         <button class="btn" id="btn-weather-ibge" onclick="buscarDadosWeather()">
                             🌦️ Cruzar IBGE + Open-Meteo
                         </button>
@@ -621,7 +625,7 @@
                 <p>🗺️ Escolha uma opção para começar:</p>
                 <p style="margin-top: 12px;">
                     <strong>📊 Modo CEMADEN:</strong> Carregue um CSV com dados de monitoramento<br>
-                    <strong>🌦️ Modo Open-Meteo:</strong> Digite uma cidade - 100% gratuito, sem API key!
+                    <strong>🌦️ Modo Open-Meteo:</strong> Digite uma cidade + escolha período (1-7 dias)<br>
                 </p>
             </div>
         </div>
@@ -637,16 +641,31 @@
                 <strong>5.</strong> Calcula população vulnerável (idosos, crianças, PcD)<br><br>
                 
                 <strong>Modo Open-Meteo (Previsão - 100% GRATUITO):</strong><br>
-                ✅ <strong>Sem API key</strong> - Funciona direto!<br>
-                ✅ <strong>Sem cadastro</strong> - Não precisa criar conta<br>
-                ✅ <strong>Sem limites</strong> - Use à vontade<br>
-                ✅ <strong>Sem cartão</strong> - Totalmente gratuito<br><br>
                 <strong>1.</strong> Digite qualquer cidade do Brasil ou mundo<br>
-                <strong>2.</strong> Sistema busca coordenadas e previsão de 7 dias<br>
-                <strong>3.</strong> Cria grid de 9 pontos ao redor da cidade<br>
-                <strong>4.</strong> Classifica risco por probabilidade e volume de chuva<br>
-                <strong>5.</strong> Cruza com dados populacionais do IBGE<br>
-                <strong>6.</strong> Identifica áreas e populações em risco climático<br><br>
+                <strong>2.</strong> Escolha o período de previsão (1, 3, 5 ou 7 dias)<br>
+                <strong>3.</strong> Sistema busca coordenadas e previsão climática<br>
+                <strong>4.</strong> Cria grid de 9 pontos ao redor da cidade<br>
+                <strong>5.</strong> Classifica risco por probabilidade e volume de chuva<br>
+                <strong>6.</strong> Cruza com dados populacionais do IBGE<br>
+                <strong>7.</strong> Identifica áreas e populações em risco climático<br><br>
+                
+                <strong>🎯 Como o risco é calculado:</strong><br>
+                <strong>🔴 Muito Alto:</strong> Probabilidade >70% + Precipitação >20mm + População vulnerável<br>
+                <strong>🟠 Alto:</strong> Probabilidade >60% OU Precipitação >15mm<br>
+                <strong>🟡 Médio:</strong> Probabilidade >40% OU Precipitação >5mm<br>
+                <strong>🟢 Baixo:</strong> Probabilidade baixa e pouca precipitação<br><br>
+                
+                <strong>👥 População vulnerável considerada:</strong><br>
+                • Idosos 60+ anos (19% da população)<br>
+                • Crianças 0-14 anos (21% da população)<br>
+                • Pessoas com Deficiência (6.7% da população)<br><br>
+                
+                <strong>🗺️ Sobre os círculos no mapa:</strong><br>
+                • Representam a área de influência ao redor de cada ponto<br>
+                • Cores indicam nível de risco (vermelho = muito alto, verde = baixo)<br>
+                • Círculos verdes são mais transparentes para destacar áreas de maior risco<br>
+                • Passe o mouse sobre os círculos para ver detalhes<br>
+                • Clique nos pontos centrais para informações completas<br><br>
                 
                 <strong>🌍 Fonte dos dados:</strong> <a href="https://open-meteo.com" target="_blank">Open-Meteo.com</a> - API climática gratuita e open source
             </p>
@@ -797,7 +816,9 @@
         
         async function buscarDadosWeather() {
             const cidade = document.getElementById('cidade-input').value.trim();
-            const diasPrevisao = document.getElementById('dias-previsao').value;
+            const diasPrevisao = parseInt(document.getElementById('dias-previsao').value);
+            
+            console.log('Cidade:', cidade, 'Dias:', diasPrevisao);
             
             if (!cidade) {
                 showNotification('Digite o nome de uma cidade!', 'error');
@@ -809,7 +830,6 @@
             document.getElementById('btn-weather-ibge').textContent = '⏳ Processando...';
             
             try {
-                // 1. Buscar coordenadas da cidade (Open-Meteo Geocoding - GRATUITO)
                 const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cidade)}&count=1&language=pt&format=json`;
                 const geoResponse = await fetch(geoUrl);
                 const geoData = await geoResponse.json();
@@ -822,8 +842,10 @@
                 const cidadeNome = `${name}${admin1 ? ', ' + admin1 : ''}`;
                 const estado = admin1 || '';
                 
-                // 2. Buscar previsão (Open-Meteo - GRATUITO, SEM API KEY)
                 const forecastUrl = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&hourly=temperature_2m,precipitation_probability,precipitation&daily=precipitation_sum,precipitation_probability_max&timezone=auto&forecast_days=${diasPrevisao}`;
+                
+                console.log('Buscando previsão:', forecastUrl);
+                
                 const forecastResponse = await fetch(forecastUrl);
                 dadosWeather = await forecastResponse.json();
                 
@@ -831,17 +853,14 @@
                     throw new Error('Erro ao buscar previsão climática');
                 }
                 
-                // 3. Buscar população do município pelo IBGE
                 await buscarPopulacaoIBGE(cidadeNome, estado);
-                
-                // 4. Criar pontos de risco baseados em previsão
-                criarPontosDeRiscoClima(latitude, longitude, cidadeNome);
+                criarPontosDeRiscoClima(latitude, longitude, cidadeNome, diasPrevisao);
                 
                 modoAtual = 'weather';
                 ibgeDataLoaded = true;
                 
                 showNotification(`✓ Análise concluída para ${cidadeNome}!`, 'success');
-                mostrarResultadoAnaliseWeather(cidadeNome);
+                mostrarResultadoAnaliseWeather(cidadeNome, diasPrevisao);
                 
             } catch (error) {
                 console.error('Erro ao buscar dados climáticos:', error);
@@ -854,7 +873,6 @@
         
         async function buscarPopulacaoIBGE(cidadeNome, estado) {
             try {
-                // Mapear nomes de estado para siglas
                 const estadosMap = {
                     'Santa Catarina': 'SC',
                     'São Paulo': 'SP',
@@ -886,7 +904,6 @@
                 const dados = populacoesPorEstado[siglaEstado] || { populacao: 100000, municipios: 1 };
                 populacaoTotalItajai = Math.floor(dados.populacao / dados.municipios);
                 
-                // Casos específicos de cidades conhecidas
                 if (cidadeNome.includes('Itajaí') || cidadeNome.includes('Itajai')) {
                     populacaoTotalItajai = 264054;
                 } else if (cidadeNome.includes('São Paulo') && cidadeNome.includes('São Paulo')) {
@@ -909,20 +926,18 @@
             }
         }
         
-        function criarPontosDeRiscoClima(lat, lon, cidadeNome) {
+        function criarPontosDeRiscoClima(lat, lon, cidadeNome, diasPrevisao) {
             areasData = [];
             
-            // Processar dados Open-Meteo - agrupa dados horários por dia
             const previsoesPorDia = {};
             
-            // Dados horários da Open-Meteo
             const times = dadosWeather.hourly.time;
             const temps = dadosWeather.hourly.temperature_2m;
             const probs = dadosWeather.hourly.precipitation_probability;
             const precips = dadosWeather.hourly.precipitation;
             
             times.forEach((time, index) => {
-                const data = time.split('T')[0]; // Pega só a data (YYYY-MM-DD)
+                const data = time.split('T')[0];
                 if (!previsoesPorDia[data]) {
                     previsoesPorDia[data] = {
                         temperaturas: [],
@@ -935,7 +950,6 @@
                 previsoesPorDia[data].precipitacoes.push(precips[index] || 0);
             });
             
-            // Criar pontos em grid ao redor da cidade
             const pontos = [
                 { offset: [0, 0], nome: 'Centro' },
                 { offset: [0.02, 0], nome: 'Leste' },
@@ -952,14 +966,12 @@
             Object.keys(previsoesPorDia).forEach((data, dayIndex) => {
                 const dadosDia = previsoesPorDia[data];
                 
-                // Calcular médias e máximos
                 const probMedia = dadosDia.probabilidades.reduce((a, b) => a + b, 0) / dadosDia.probabilidades.length;
                 const probMaxima = Math.max(...dadosDia.probabilidades);
                 const precipTotal = dadosDia.precipitacoes.reduce((a, b) => a + b, 0);
                 const precipMaxima = Math.max(...dadosDia.precipitacoes);
                 const tempMedia = dadosDia.temperaturas.reduce((a, b) => a + b, 0) / dadosDia.temperaturas.length;
                 
-                // Determinar condição climática
                 let condicao = 'Ensolarado';
                 if (precipTotal > 10) condicao = 'Chuva forte';
                 else if (precipTotal > 2) condicao = 'Chuva moderada';
@@ -967,7 +979,6 @@
                 else if (probMedia > 50) condicao = 'Nublado';
                 else if (probMedia > 20) condicao = 'Parcialmente nublado';
                 
-                // Criar ponto para cada região
                 pontos.forEach(ponto => {
                     const risco = classificarRiscoClima(probMedia, precipTotal, precipMaxima);
                     
@@ -1013,17 +1024,15 @@
             return 'baixo';
         }
         
-        function mostrarResultadoAnaliseWeather(cidadeNome) {
+        function mostrarResultadoAnaliseWeather(cidadeNome, diasPrevisao) {
             const totalEmRisco = filteredData.reduce((sum, a) => sum + a.populacao, 0);
             const percentual = ((totalEmRisco / populacaoTotalItajai) * 100).toFixed(2);
-            const raio = document.getElementById('raio-analise').value;
-            const diasPrevisao = document.getElementById('dias-previsao').value;
             
             const areasAltoRisco = filteredData.filter(a => a.risco === 'muito_alto' || a.risco === 'alto').length;
             const probMaxima = Math.max(...filteredData.map(a => parseFloat(a.dadosClima.probabilidadeChuva)));
             const precipMaxima = Math.max(...filteredData.map(a => parseFloat(a.dadosClima.maxPrecipitacao)));
             
-            const textoDias = diasPrevisao === '1' ? '1 dia' : `${diasPrevisao} dias`;
+            const textoDias = diasPrevisao === 1 ? '1 dia' : `${diasPrevisao} dias`;
             
             const html = `
                 <div class="analysis-result">
@@ -1116,13 +1125,12 @@
             filteredData.forEach(area => {
                 const color = getCor(area.risco);
                 
-                // Opacidade baseada no nível de risco
                 let opacity = 0.6;
                 let fillOpacity = 0.25;
                 
                 if (area.risco === 'baixo') {
-                    opacity = 0.3;        // Muito mais transparente
-                    fillOpacity = 0.1;    // Preenchimento bem suave
+                    opacity = 0.3;
+                    fillOpacity = 0.1;
                 } else if (area.risco === 'medio') {
                     opacity = 0.5;
                     fillOpacity = 0.2;
@@ -1137,7 +1145,6 @@
                     fillOpacity: fillOpacity
                 }).addTo(map);
                 
-                // Adicionar tooltip no círculo
                 circle.bindTooltip(`${getLabel(area.risco)} - ${area.nome}`, {
                     permanent: false,
                     direction: 'top'
@@ -1198,12 +1205,9 @@
                 const group = L.featureGroup(markers);
                 const bounds = group.getBounds();
                 
-                // Zoom mais adequado dependendo do modo
                 if (modoAtual === 'weather') {
-                    // Para modo weather, dar zoom mais próximo já que os pontos são próximos
                     map.fitBounds(bounds.pad(0.3));
                 } else {
-                    // Para CEMADEN, usar padding padrão
                     map.fitBounds(bounds.pad(0.1));
                 }
             }
@@ -1321,7 +1325,8 @@
             
             if (ibgeDataLoaded) {
                 if (modoAtual === 'weather') {
-                    mostrarResultadoAnaliseWeather(areasData[0]?.municipio || 'Cidade');
+                    const diasPrevisao = parseInt(document.getElementById('dias-previsao').value);
+                    mostrarResultadoAnaliseWeather(areasData[0]?.municipio || 'Cidade', diasPrevisao);
                 } else {
                     mostrarResultadoAnalise();
                 }
